@@ -15,7 +15,7 @@
   <Identity
     Name="dc9f620f-744a-4b4b-b212-6e4c2f14891c"
     Publisher="CN=Elias"
-    Version="1.0.0.0" />
+    Version="1.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="dc9f620f-744a-4b4b-b212-6e4c2f14891c" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
