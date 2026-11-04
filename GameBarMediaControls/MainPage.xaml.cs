@@ -19,18 +19,7 @@ using System.Reflection;
 
 namespace GameBarMediaControls
 {
-    public sealed partial class MainPage : Page
-    {
-        public MainPage()
-        {
-            this.InitializeComponent();
-
-#if DEBUG
-            debugPanel.Visibility = Visibility.Visible;
-#else
-            debugPanel.Visibility = Visibility.Collapsed;
-#endif
-
+    
 public sealed partial class MainPage : Page
 {
     public MainPage()
@@ -73,7 +62,6 @@ public sealed partial class MainPage : Page
 
         GetSessions();
     }
-
 
         private async void Gsmtcsm_SessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args) {
             await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
