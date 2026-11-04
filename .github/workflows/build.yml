@@ -1,0 +1,184 @@
+
+name: Build GameBarMediaControls
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Download source code
+        uses: actions/checkout@v7
+
+      - name: Configure MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          msbuild .\GameBarMediaControls.sln /t:Restore /p:Configuration=Release /p:Platform=x64 /m
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "NuGet restore failed"
+          }
+
+      - name: Create certificate and build package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $out = Join-Path $env:GITHUB_WORKSPACE 'Packages'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+
+          # Publisher must match Package.appxmanifest
+          $cert = New-SelfSignedCertificate `
+            -Type Custom `
+            -Subject 'CN=Elias' `
+            -FriendlyName 'GameBarMediaControls test certificate' `
+            -KeyUsage DigitalSignature `
+            -KeyExportPolicy Exportable `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @(
+              '2.5.29.37={text}1.3.6.1.5.5.7.3.3',
+              '2.5.29.19={text}'
+            )
+
+          # Create temporary signing password
+          $passwordText = [guid]::NewGuid().ToString('N')
+          $password = ConvertTo-SecureString `
+            -String $passwordText -AsPlainText -Force
+
+          $pfx = Join-Path $env:RUNNER_TEMP 'GameBarMediaControls.pfx'
+
+          Export-PfxCertificate `
+            -Cert $cert `
+            -FilePath $pfx `
+            -Password $password | Out-Null
+
+          # Export public certificate for installation
+          Export-Certificate `
+            -Cert $cert `
+            -FilePath (Join-Path $out 'GameBarMediaControls.cer') | Out-Null
+
+          $outPath = $out.TrimEnd('\') + '\'
+
+          # Build and sign the UWP application
+          $msbuildArgs = @(
+            '.\GameBarMediaControls.sln',
+            '/p:Configuration=Release',
+            '/p:Platform=x64',
+            '/p:UapAppxPackageBuildMode=SideloadOnly',
+            '/p:AppxBundle=Never',
+            "/p:AppxPackageDir=$outPath",
+            '/p:GenerateAppxPackageOnBuild=true',
+            '/p:AppxPackageSigningEnabled=true',
+            "/p:PackageCertificateKeyFile=$pfx",
+            "/p:PackageCertificatePassword=$passwordText",
+            '/m',
+            '/verbosity:minimal'
+          )
+
+          & msbuild @msbuildArgs
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild package creation failed"
+          }
+
+          # Verify that the main package exists
+          $appx = Get-ChildItem -Path $out -Filter '*.appx' -File -Recurse |
+            Where-Object {
+              $_.FullName -notmatch '[\\/]Dependencies[\\/]'
+            } |
+            Select-Object -First 1
+
+          if (-not $appx) {
+            Get-ChildItem -Path $out -Recurse | Select-Object FullName
+            throw "No APPX package was generated"
+          }
+
+          # Delete the private signing certificate
+          Remove-Item $pfx -Force
+          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+
+      - name: Create installation script
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE 'Packages'
+
+          $script = @'
+          $ErrorActionPreference = "Stop"
+
+          # Require administrator privileges
+          $principal = New-Object Security.Principal.WindowsPrincipal(
+            [Security.Principal.WindowsIdentity]::GetCurrent()
+          )
+
+          if (-not $principal.IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator
+          )) {
+            throw "Open PowerShell as Administrator and run Install.ps1 again."
+          }
+
+          $root = Split-Path -Parent $PSCommandPath
+
+          $cert = Join-Path $root "GameBarMediaControls.cer"
+
+          $main = Get-ChildItem -Path $root -Filter "*.appx" -File -Recurse |
+            Where-Object {
+              $_.FullName -notmatch "[\\/]Dependencies[\\/]"
+            } |
+            Select-Object -First 1
+
+          $dependencies = @(
+            Get-ChildItem -Path $root -Filter "*.appx" -File -Recurse |
+              Where-Object {
+                $_.FullName -match "[\\/]Dependencies[\\/]"
+              } |
+              ForEach-Object { $_.FullName }
+          )
+
+          if (-not (Test-Path $cert)) {
+            throw "Signing certificate not found."
+          }
+
+          if (-not $main) {
+            throw "Main APPX package not found."
+          }
+
+          # Trust the certificate
+          Import-Certificate `
+            -FilePath $cert `
+            -CertStoreLocation "Cert:\LocalMachine\TrustedPeople" |
+            Out-Null
+
+          # Install the application and its dependencies
+          if ($dependencies.Count -gt 0) {
+            Add-AppxPackage `
+              -Path $main.FullName `
+              -DependencyPath $dependencies
+          }
+          else {
+            Add-AppxPackage -Path $main.FullName
+          }
+
+          Write-Host "GameBarMediaControls installation completed."
+          Write-Host "Open Xbox Game Bar using Win + G."
+          '@
+
+          Set-Content `
+            -Path (Join-Path $out 'Install.ps1') `
+            -Value $script `
+            -Encoding utf8
+
+      - name: Upload installable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: GameBarMediaControls-x64
+          path: Packages/
+          if-no-files-found: error
+          retention-days: 14
