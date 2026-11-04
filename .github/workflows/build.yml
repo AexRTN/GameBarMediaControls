@@ -90,17 +90,26 @@ jobs:
           }
 
           # Verify that the main package exists
-          $appx = Get-ChildItem -Path $out -Filter '*.appx' -File -Recurse |
+          
+          $package = Get-ChildItem -Path $out -File -Recurse |
             Where-Object {
+              $_.Extension -in @(
+                '.appx',
+                '.msix',
+                '.appxbundle',
+                '.msixbundle'
+              ) -and
               $_.FullName -notmatch '[\\/]Dependencies[\\/]'
             } |
             Select-Object -First 1
-
-          if (-not $appx) {
+          
+          if (-not $package) {
             Get-ChildItem -Path $out -Recurse | Select-Object FullName
-            throw "No APPX package was generated"
+            throw "No APPX/MSIX package was generated"
           }
-
+          
+          Write-Host "Package detected successfully:"
+          Write-Host $package.FullName
           # Delete the private signing certificate
           Remove-Item $pfx -Force
           Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
