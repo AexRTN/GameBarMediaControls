@@ -30,34 +30,50 @@ namespace GameBarMediaControls
 #else
             debugPanel.Visibility = Visibility.Collapsed;
 #endif
-private string GetFavoriteSession()
+
+public sealed partial class MainPage : Page
 {
-    object value;
+    public MainPage()
+    {
+        this.InitializeComponent();
 
-    var settings = ApplicationData.Current.RoamingSettings.Values;
+#if DEBUG
+        debugPanel.Visibility = Visibility.Visible;
+#else
+        debugPanel.Visibility = Visibility.Collapsed;
+#endif
 
-    return settings.TryGetValue("fav", out value)
-        ? value as string
-        : null;
-}
-            Init();
-        }
+        Init();
+    }
 
-        private GlobalSystemMediaTransportControlsSessionManager gsmtcsm = null;
-        private IDictionary<string, GlobalSystemMediaTransportControlsSession> sessions = null;
-        private GlobalSystemMediaTransportControlsSession selectedSession = null;
-        private string selectedItem = null;
+    private GlobalSystemMediaTransportControlsSessionManager gsmtcsm = null;
+    private IDictionary<string, GlobalSystemMediaTransportControlsSession> sessions = null;
+    private GlobalSystemMediaTransportControlsSession selectedSession = null;
+    private string selectedItem = null;
 
-        private readonly List<int> handlersAddedHashes = new List<int>();
+    private readonly List<int> handlersAddedHashes = new List<int>();
 
+    // Safely read the favorite session setting.
+    private string GetFavoriteSession()
+    {
+        object value;
 
-        private async void Init() {
-            gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-            gsmtcsm.SessionsChanged += Gsmtcsm_SessionsChanged;
-            sessionsCombo.SelectionChanged += SessionsCombo_SelectionChanged;
+        var settings = ApplicationData.Current.RoamingSettings.Values;
 
-            GetSessions();
-        }
+        return settings.TryGetValue("fav", out value)
+            ? value as string
+            : null;
+    }
+
+    private async void Init()
+    {
+        gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        gsmtcsm.SessionsChanged += Gsmtcsm_SessionsChanged;
+        sessionsCombo.SelectionChanged += SessionsCombo_SelectionChanged;
+
+        GetSessions();
+    }
+
 
         private async void Gsmtcsm_SessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args) {
             await this.Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
