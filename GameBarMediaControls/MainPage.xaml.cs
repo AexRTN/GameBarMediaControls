@@ -30,7 +30,16 @@ namespace GameBarMediaControls
 #else
             debugPanel.Visibility = Visibility.Collapsed;
 #endif
+private string GetFavoriteSession()
+{
+    object value;
 
+    var settings = ApplicationData.Current.RoamingSettings.Values;
+
+    return settings.TryGetValue("fav", out value)
+        ? value as string
+        : null;
+}
             Init();
         }
 
@@ -100,7 +109,7 @@ namespace GameBarMediaControls
             }
 
             var settings = ApplicationData.Current.RoamingSettings;
-            var fav = settings.Values["fav"] as string;
+            var fav = GetFavoriteSession();
 
             if (sessions.Keys.Contains(fav)) sessionsCombo.SelectedItem = fav;
             else if (selectedItem != null && sessions.Keys.Contains(selectedItem)) sessionsCombo.SelectedItem = selectedItem;
@@ -188,8 +197,7 @@ namespace GameBarMediaControls
             RefreshButtons();
             UpdateTimeline();
 
-            var settings = ApplicationData.Current.RoamingSettings;
-            heartCheckbox.IsChecked = settings.Values["fav"] as string == selectedItem;
+            heartCheckbox.IsChecked = GetFavoriteSession() == selectedItem;
         }
 
         private async void Button_Click_PlayPause(object sender, RoutedEventArgs e) {
@@ -211,8 +219,7 @@ namespace GameBarMediaControls
         private async void Button_Click_Shuffle(object sender, RoutedEventArgs e) {
             //var tprop = selectedSession.GetTimelineProperties();
             //(sender as Button).Content = tprop.Position.ToString();
-            var settings = ApplicationData.Current.RoamingSettings;
-            (sender as Button).Content = settings.Values["fav"] as string;
+            (sender as Button).Content = GetFavoriteSession() ?? "";
             heartCheckbox.IsChecked = true;
 
             // no worky in opera spotify, so not goina implement
